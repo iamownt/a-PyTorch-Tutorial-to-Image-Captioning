@@ -3,13 +3,10 @@ import numpy as np
 import h5py
 import json
 import torch
-# from scipy.misc import imread, imresize
-import imageio
-from PIL import Image
+from scipy.misc import imread, imresize
 from tqdm import tqdm
 from collections import Counter
 from random import seed, choice, sample
-
 
 
 def create_input_files(dataset, karpathy_json_path, image_folder, captions_per_image, min_word_freq, output_folder,
@@ -90,13 +87,12 @@ def create_input_files(dataset, karpathy_json_path, image_folder, captions_per_i
     for impaths, imcaps, split in [(train_image_paths, train_image_captions, 'TRAIN'),
                                    (val_image_paths, val_image_captions, 'VAL'),
                                    (test_image_paths, test_image_captions, 'TEST')]:
-        # ‘a’：对打开已经存在的文件进行读写，如果不存在则创建一个新文件读写，此为默认的 mode
+
         with h5py.File(os.path.join(output_folder, split + '_IMAGES_' + base_filename + '.hdf5'), 'a') as h:
             # Make a note of the number of captions we are sampling per image
             h.attrs['captions_per_image'] = captions_per_image
 
             # Create dataset inside HDF5 file to store images
-            # 如果 data 为 None，则会创建一个空的 dataset，此时 shape 和 dtype 必须设置；
             images = h.create_dataset('images', (len(impaths), 3, 256, 256), dtype='uint8')
 
             print("\nReading %s images and captions, storing to file...\n" % split)
@@ -116,11 +112,11 @@ def create_input_files(dataset, karpathy_json_path, image_folder, captions_per_i
                 assert len(captions) == captions_per_image
 
                 # Read images
-                img = imageio.imread(impaths[i])
+                img = imread(impaths[i])
                 if len(img.shape) == 2:
                     img = img[:, :, np.newaxis]
                     img = np.concatenate([img, img, img], axis=2)
-                img = np.array(Image.fromarray(img).resize((256, 256)))
+                img = imresize(img, (256, 256))
                 img = img.transpose(2, 0, 1)
                 assert img.shape == (3, 256, 256)
                 assert np.max(img) <= 255
@@ -244,10 +240,7 @@ class AverageMeter(object):
     """
 
     def __init__(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
+        self.reset()
 
     def reset(self):
         self.val = 0
@@ -269,7 +262,7 @@ def adjust_learning_rate(optimizer, shrink_factor):
     :param optimizer: optimizer whose learning rate must be shrunk.
     :param shrink_factor: factor in interval (0, 1) to multiply learning rate with.
     """
-    # shrunk：降低
+
     print("\nDECAYING learning rate.")
     for param_group in optimizer.param_groups:
         param_group['lr'] = param_group['lr'] * shrink_factor

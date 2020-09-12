@@ -32,7 +32,6 @@ class Encoder(nn.Module):
         :param images: images, a tensor of dimensions (batch_size, 3, image_size, image_size)
         :return: encoded images
         """
-        # resnet输入224维，在最后的Pool为7*7。224/32=7
         out = self.resnet(images)  # (batch_size, 2048, image_size/32, image_size/32)
         out = self.adaptive_pool(out)  # (batch_size, 2048, encoded_image_size, encoded_image_size)
         out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, 2048)
@@ -68,7 +67,6 @@ class Attention(nn.Module):
         self.decoder_att = nn.Linear(decoder_dim, attention_dim)  # linear layer to transform decoder's output
         self.full_att = nn.Linear(attention_dim, 1)  # linear layer to calculate values to be softmax-ed
         self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
         self.softmax = nn.Softmax(dim=1)  # softmax layer to calculate weights
 
     def forward(self, encoder_out, decoder_hidden):
@@ -81,9 +79,10 @@ class Attention(nn.Module):
         """
         att1 = self.encoder_att(encoder_out)  # (batch_size, num_pixels, attention_dim)
         att2 = self.decoder_att(decoder_hidden)  # (batch_size, attention_dim)
-        att = self.full_att(self.tanh(att1 + att2.unsqueeze(1))).squeeze(2)  # (batch_size, num_pixels)
+        att = self.full_att(self.relu(att1 + att2.unsqueeze(1))).squeeze(2)  # (batch_size, num_pixels)
         alpha = self.softmax(att)  # (batch_size, num_pixels)
         attention_weighted_encoding = (encoder_out * alpha.unsqueeze(2)).sum(dim=1)  # (batch_size, encoder_dim)
+
         return attention_weighted_encoding, alpha
 
 
@@ -117,7 +116,6 @@ class DecoderWithAttention(nn.Module):
         self.decode_step = nn.LSTMCell(embed_dim + encoder_dim, decoder_dim, bias=True)  # decoding LSTMCell
         self.init_h = nn.Linear(encoder_dim, decoder_dim)  # linear layer to find initial hidden state of LSTMCell
         self.init_c = nn.Linear(encoder_dim, decoder_dim)  # linear layer to find initial cell state of LSTMCell
-        # f_beta是论文中作者的实现(技巧)，使得模型更加注重图片的object。
         self.f_beta = nn.Linear(decoder_dim, encoder_dim)  # linear layer to create a sigmoid-activated gate
         self.sigmoid = nn.Sigmoid()
         self.fc = nn.Linear(decoder_dim, vocab_size)  # linear layer to find scores over vocabulary
@@ -137,7 +135,6 @@ class DecoderWithAttention(nn.Module):
 
         :param embeddings: pre-trained embeddings
         """
-        # 非常经典的一行代码。
         self.embedding.weight = nn.Parameter(embeddings)
 
     def fine_tune_embeddings(self, fine_tune=True):
@@ -180,7 +177,6 @@ class DecoderWithAttention(nn.Module):
         num_pixels = encoder_out.size(1)
 
         # Sort input data by decreasing lengths; why? apparent below
-        # 将这个batch_size的数据按照caption_len排序
         caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
         encoder_out = encoder_out[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
@@ -202,7 +198,6 @@ class DecoderWithAttention(nn.Module):
         # At each time-step, decode by
         # attention-weighing the encoder's output based on the decoder's previous hidden state output
         # then generate a new word in the decoder with the previous word and the attention weighted encoding
-        # 注意decode_lengths是包含<start>的
         for t in range(max(decode_lengths)):
             batch_size_t = sum([l > t for l in decode_lengths])
             attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
