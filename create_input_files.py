@@ -9,5 +9,3 @@ if __name__ == '__main__':
                        min_word_freq=5,
                        output_folder=r"D:\Users\wt\Downloads\image_caption\outputfile",
                        max_len=50)
-
-# try if I can commit!
